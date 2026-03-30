@@ -35,12 +35,13 @@ services:
     autoDeploy: true
 
   # Frontend Static Site
-  - type: static
+  - type: web
     name: mileage-tracker
+    env: static
     plan: starter
     region: frankfurt
     buildCommand: cd frontend && npm install && npm run build
-    publishDir: frontend/dist
+    staticPublishPath: frontend/dist
     envVars:
       - key: VITE_API_URL
         value: https://mileage-api.onrender.com/api
@@ -74,12 +75,3 @@ databases:
     region: frankfurt
     databaseName: mileage_tracker
     user: mileage_user
-
-# Environment Group (optional - for shared env vars)
-envVarGroups:
-  - name: mileage-secrets
-    envVars:
-      - key: JWT_SECRET
-        generateValue: true
-      - key: JWT_REFRESH_SECRET
-        generateValue: true
