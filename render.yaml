@@ -39,7 +39,6 @@ services:
     name: mileage-tracker
     env: static
     plan: starter
-    region: frankfurt
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
     envVars:
