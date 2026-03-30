@@ -109,8 +109,8 @@ router.post('/trips', authenticate, [
         total: trips.length,
         created,
         updated,
-        errors,
-        skipped: trips.length - created - updated - errors
+        errors: errorCount,
+        skipped: trips.length - created - updated - errorCount
       },
       results
     });
@@ -199,7 +199,7 @@ router.post('/receipts', authenticate, [
         total: receipts.length,
         created,
         updated,
-        errors
+        errors: errorCount
       },
       results
     });
@@ -287,7 +287,7 @@ router.post('/sites', authenticate, [
         total: sites.length,
         created,
         updated,
-        errors
+        errors: errorCount
       },
       results
     });
