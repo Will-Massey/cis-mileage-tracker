@@ -24,9 +24,9 @@ services:
       - key: JWT_REFRESH_SECRET
         generateValue: true
       - key: CORS_ORIGIN
-        value: https://mileage-tracker.onrender.com
+        value: https://mileage-tracker-9svh.onrender.com
       - key: CLIENT_URL
-        value: https://mileage-tracker.onrender.com
+        value: https://mileage-tracker-9svh.onrender.com
       - key: HMRC_RATE_FIRST_10000
         value: 0.45
       - key: HMRC_RATE_OVER_10000
@@ -42,7 +42,7 @@ services:
     staticPublishPath: ./frontend/dist
     envVars:
       - key: VITE_API_URL
-        value: https://mileage-api.onrender.com/api
+        value: https://mileage-api-XXXX.onrender.com/api
       - key: VITE_APP_NAME
         value: Mileage Tracker
       - key: VITE_APP_VERSION

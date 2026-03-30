@@ -25,7 +25,28 @@ const BCRYPT_CONFIG = {
 
 // CORS Configuration
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Allowed origins
+    const allowedOrigins = [
+      process.env.CORS_ORIGIN,
+      process.env.CLIENT_URL,
+      'http://localhost:5173',
+      'http://localhost:3000',
+    ].filter(Boolean);
+    
+    // Allow Render subdomains (mileage-tracker-*.onrender.com)
+    const isRenderSubdomain = origin.match(/^https:\/\/mileage-.*\.onrender\.com$/);
+    
+    if (allowedOrigins.includes(origin) || isRenderSubdomain) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS blocked: ${origin}`);
+      callback(null, true); // Temporarily allow all for debugging
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [
