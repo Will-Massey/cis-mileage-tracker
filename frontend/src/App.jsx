@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import AppRoutes from './routes';
+import OfflineBanner from './components/common/OfflineBanner';
 import './styles/globals.css';
 
 /**
@@ -12,6 +13,7 @@ const App = () => {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <OfflineBanner />
         <AppRoutes />
       </AuthProvider>
     </BrowserRouter>

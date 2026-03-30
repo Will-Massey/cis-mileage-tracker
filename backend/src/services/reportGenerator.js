@@ -1,450 +1,222 @@
 /**
  * Report Generator Service
- * PDF and CSV report generation for mileage data
+ * PDF, CSV, and Excel report generation
  */
 
 const PDFDocument = require('pdfkit');
-const { format } = require('@fast-csv/format');
-const fs = require('fs');
-const path = require('path');
-const { prisma } = require('../config/database');
-const { formatCurrency, formatMiles } = require('../utils/hmrcRates');
+const csv = require('fast-csv');
+const { format } = require('date-fns');
 
-// Report storage directory
-const REPORTS_DIR = process.env.REPORTS_DIR || path.join(__dirname, '../../reports');
+/**
+ * Generate PDF mileage report
+ * @param {object} user - User data
+ * @param {Array} trips - Array of trip objects
+ * @param {object} summary - Summary statistics
+ * @param {string} taxYear - Tax year
+ * @returns {Promise<Buffer>} PDF buffer
+ */
+async function generatePDFReport(user, trips, summary, taxYear) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 50 });
+    const buffers = [];
 
-// Ensure reports directory exists
-if (!fs.existsSync(REPORTS_DIR)) {
-  fs.mkdirSync(REPORTS_DIR, { recursive: true });
+    doc.on('data', buffer => buffers.push(buffer));
+    doc.on('end', () => resolve(Buffer.concat(buffers)));
+    doc.on('error', reject);
+
+    // Header
+    doc.fontSize(24).font('Helvetica-Bold').text('Mileage Report', 50, 50);
+    doc.fontSize(12).font('Helvetica');
+    doc.text(`Tax Year: ${taxYear}`, 50, 80);
+    doc.text(`Generated: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 50, 95);
+
+    // User Information
+    doc.fontSize(14).font('Helvetica-Bold').text('User Information', 50, 130);
+    doc.fontSize(11).font('Helvetica');
+    doc.text(`Name: ${user.firstName} ${user.lastName}`, 50, 150);
+    doc.text(`Email: ${user.email}`, 50, 165);
+    if (user.phone) {
+      doc.text(`Phone: ${user.phone}`, 50, 180);
+    }
+
+    // Summary Box
+    const summaryY = 210;
+    doc.rect(50, summaryY, 500, 100).stroke('#cccccc');
+    doc.fontSize(14).font('Helvetica-Bold').text('Summary', 60, summaryY + 10);
+    doc.fontSize(11).font('Helvetica');
+    
+    // Summary columns
+    doc.text(`Total Miles: ${summary.totalMiles.toFixed(2)}`, 60, summaryY + 35);
+    doc.text(`Total Claim: £${summary.totalAmount.toFixed(2)}`, 250, summaryY + 35);
+    doc.text(`Number of Trips: ${summary.tripCount}`, 400, summaryY + 35);
+    
+    const at45p = summary.breakdown?.at45p || summary.at45p || { miles: 0, amount: 0 };
+    const at25p = summary.breakdown?.at25p || summary.at25p || { miles: 0, amount: 0 };
+    
+    doc.text(`Miles at 45p: ${at45p.miles.toFixed(2)}`, 60, summaryY + 55);
+    doc.text(`Amount at 45p: £${at45p.amount.toFixed(2)}`, 250, summaryY + 55);
+    
+    doc.text(`Miles at 25p: ${at25p.miles.toFixed(2)}`, 60, summaryY + 75);
+    doc.text(`Amount at 25p: £${at25p.amount.toFixed(2)}`, 250, summaryY + 75);
+
+    // Trips Table
+    let y = summaryY + 120;
+    doc.fontSize(14).font('Helvetica-Bold').text('Trip Details', 50, y);
+    y += 25;
+
+    // Table header
+    doc.fontSize(9).font('Helvetica-Bold');
+    const colX = {
+      date: 50,
+      from: 110,
+      to: 220,
+      purpose: 330,
+      miles: 430,
+      rate: 470,
+      amount: 510
+    };
+
+    doc.text('Date', colX.date, y);
+    doc.text('From', colX.from, y);
+    doc.text('To', colX.to, y);
+    doc.text('Purpose', colX.purpose, y);
+    doc.text('Miles', colX.miles, y);
+    doc.text('Rate', colX.rate, y);
+    doc.text('Amount', colX.amount, y);
+
+    y += 15;
+    doc.moveTo(50, y - 5).lineTo(550, y - 5).stroke('#999999');
+
+    // Table rows
+    doc.fontSize(8).font('Helvetica');
+    
+    trips.forEach((trip, index) => {
+      // Add new page if needed
+      if (y > 700) {
+        doc.addPage();
+        y = 50;
+        
+        // Repeat header on new page
+        doc.fontSize(9).font('Helvetica-Bold');
+        doc.text('Date', colX.date, y);
+        doc.text('From', colX.from, y);
+        doc.text('To', colX.to, y);
+        doc.text('Purpose', colX.purpose, y);
+        doc.text('Miles', colX.miles, y);
+        doc.text('Rate', colX.rate, y);
+        doc.text('Amount', colX.amount, y);
+        y += 15;
+        doc.moveTo(50, y - 5).lineTo(550, y - 5).stroke('#999999');
+        doc.fontSize(8).font('Helvetica');
+      }
+
+      const tripDate = trip.tripDate ? format(new Date(trip.tripDate), 'dd/MM/yyyy') : '-';
+      const from = trip.startLocation ? trip.startLocation.substring(0, 15) : '-';
+      const to = trip.endLocation ? trip.endLocation.substring(0, 15) : '-';
+      const purpose = trip.purpose ? trip.purpose.substring(0, 12) : '-';
+      const miles = parseFloat(trip.distanceMiles).toFixed(2);
+      const rate = `${Math.round(parseFloat(trip.rateApplied) * 100)}p`;
+      const amount = `£${parseFloat(trip.amountGbp).toFixed(2)}`;
+
+      doc.text(tripDate, colX.date, y);
+      doc.text(from, colX.from, y);
+      doc.text(to, colX.to, y);
+      doc.text(purpose, colX.purpose, y);
+      doc.text(miles, colX.miles, y);
+      doc.text(rate, colX.rate, y);
+      doc.text(amount, colX.amount, y);
+
+      // Alternate row background
+      if (index % 2 === 0) {
+        doc.rect(50, y - 2, 500, 12).fill('#f5f5f5');
+        doc.fillColor('#000000');
+        // Re-write text after fill
+        doc.text(tripDate, colX.date, y);
+        doc.text(from, colX.from, y);
+        doc.text(to, colX.to, y);
+        doc.text(purpose, colX.purpose, y);
+        doc.text(miles, colX.miles, y);
+        doc.text(rate, colX.rate, y);
+        doc.text(amount, colX.amount, y);
+      }
+
+      y += 15;
+    });
+
+    // Footer
+    const footerY = doc.page.height - 50;
+    doc.fontSize(8).font('Helvetica-Oblique');
+    doc.text(
+      'This report is generated for HMRC self-assessment purposes. Please retain this report for 5 years.',
+      50,
+      footerY,
+      { align: 'center', width: 500 }
+    );
+
+    doc.end();
+  });
 }
 
 /**
- * Generate PDF report
- * @param {Object} options - Report options
- * @returns {Promise<Object>} Generated report info
+ * Generate CSV mileage report
+ * @param {Array} trips - Array of trip objects
+ * @returns {Promise<string>} CSV string
  */
-const generatePDF = async (options) => {
-  const {
-    userId,
-    userName,
-    trips,
-    dateFrom,
-    dateTo,
-    taxYear,
-    totalMiles,
-    totalAmount,
-    tripCount,
-    reportName,
-  } = options;
-
+async function generateCSVReport(trips) {
   return new Promise((resolve, reject) => {
-    try {
-      const filename = `report_${Date.now()}_${userId.slice(0, 8)}.pdf`;
-      const filepath = path.join(REPORTS_DIR, filename);
-      const doc = new PDFDocument({ margin: 50 });
-      const stream = fs.createWriteStream(filepath);
+    const rows = trips.map(trip => ({
+      Date: trip.tripDate ? format(new Date(trip.tripDate), 'dd/MM/yyyy') : '',
+      'From Location': trip.startLocation || '',
+      'To Location': trip.endLocation || '',
+      'Start Postcode': trip.startPostcode || '',
+      'End Postcode': trip.endPostcode || '',
+      'Round Trip': trip.isRoundTrip ? 'Yes' : 'No',
+      'Purpose Category': trip.purposeCategory || '',
+      'Purpose': trip.purpose || '',
+      'Miles': parseFloat(trip.distanceMiles).toFixed(2),
+      'Rate Applied': `${parseFloat(trip.rateApplied).toFixed(2)}p`,
+      'Amount': parseFloat(trip.amountGbp).toFixed(2),
+      'Vehicle': trip.vehicle?.name || 'Personal Vehicle',
+      'Notes': trip.notes || ''
+    }));
 
-      doc.pipe(stream);
+    const chunks = [];
+    const stream = csv.format({ headers: true });
 
-      // Header
-      doc.fontSize(24).text('Mileage Report', 50, 50);
-      doc.fontSize(12).text(`Generated: ${new Date().toLocaleDateString('en-GB')}`, 50, 80);
-      
-      // Report info
-      doc.moveDown();
-      doc.fontSize(14).text(reportName || 'Business Mileage Report', 50, 110);
-      doc.fontSize(10);
-      doc.text(`User: ${userName}`, 50, 130);
-      doc.text(`Period: ${new Date(dateFrom).toLocaleDateString('en-GB')} - ${new Date(dateTo).toLocaleDateString('en-GB')}`, 50, 145);
-      if (taxYear) {
-        doc.text(`Tax Year: ${taxYear}`, 50, 160);
-      }
+    stream.on('data', chunk => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+    stream.on('error', reject);
 
-      // Summary box
-      doc.moveDown(2);
-      doc.rect(50, 180, 500, 60).stroke();
-      doc.fontSize(11).text('Summary', 60, 190);
-      doc.fontSize(10);
-      doc.text(`Total Trips: ${tripCount}`, 60, 210);
-      doc.text(`Total Miles: ${formatMiles(totalMiles)}`, 200, 210);
-      doc.text(`Total Amount: ${formatCurrency(totalAmount)}`, 350, 210);
-
-      // Trips table header
-      let y = 260;
-      doc.moveDown(2);
-      doc.fontSize(10).fillColor('#333');
-      
-      // Table headers
-      doc.rect(50, y, 500, 20).fill('#f0f0f0');
-      doc.fillColor('#000');
-      doc.text('Date', 55, y + 5);
-      doc.text('From', 110, y + 5);
-      doc.text('To', 220, y + 5);
-      doc.text('Purpose', 330, y + 5);
-      doc.text('Miles', 430, y + 5);
-      doc.text('Rate', 470, y + 5);
-      doc.text('Amount', 510, y + 5);
-
-      y += 25;
-
-      // Table rows
-      trips.forEach((trip, index) => {
-        // Add new page if needed
-        if (y > 700) {
-          doc.addPage();
-          y = 50;
-          
-          // Repeat headers
-          doc.rect(50, y, 500, 20).fill('#f0f0f0');
-          doc.fillColor('#000');
-          doc.text('Date', 55, y + 5);
-          doc.text('From', 110, y + 5);
-          doc.text('To', 220, y + 5);
-          doc.text('Purpose', 330, y + 5);
-          doc.text('Miles', 430, y + 5);
-          doc.text('Rate', 470, y + 5);
-          doc.text('Amount', 510, y + 5);
-          y += 25;
-        }
-
-        // Alternate row colors
-        if (index % 2 === 0) {
-          doc.rect(50, y - 2, 500, 18).fill('#fafafa');
-        }
-
-        doc.fillColor('#000');
-        doc.fontSize(8);
-        
-        const tripDate = new Date(trip.tripDate).toLocaleDateString('en-GB');
-        const rate = parseFloat(trip.rateApplied);
-        const amount = parseFloat(trip.amountGbp);
-        const miles = parseFloat(trip.distanceMiles);
-
-        doc.text(tripDate, 55, y);
-        doc.text(truncate(trip.startLocation, 15), 110, y);
-        doc.text(truncate(trip.endLocation, 15), 220, y);
-        doc.text(truncate(trip.purpose, 18), 330, y);
-        doc.text(miles.toFixed(2), 430, y);
-        doc.text(`${(rate * 100).toFixed(0)}p`, 470, y);
-        doc.text(formatCurrency(amount).replace('£', ''), 510, y);
-
-        y += 18;
-      });
-
-      // Footer
-      doc.fontSize(8).fillColor('#666');
-      doc.text('This report is generated for HMRC mileage claim purposes.', 50, 750);
-      doc.text('UK Business Mileage Tracker', 50, 765);
-
-      doc.end();
-
-      stream.on('finish', () => {
-        const stats = fs.statSync(filepath);
-        resolve({
-          filename,
-          filepath,
-          size: stats.size,
-        });
-      });
-
-      stream.on('error', reject);
-    } catch (error) {
-      reject(error);
-    }
+    rows.forEach(row => stream.write(row));
+    stream.end();
   });
-};
+}
 
 /**
- * Generate CSV report
- * @param {Object} options - Report options
- * @returns {Promise<Object>} Generated report info
+ * Generate summary text for emails
+ * @param {object} summary - Summary statistics
+ * @param {string} taxYear - Tax year
+ * @returns {string} Formatted summary
  */
-const generateCSV = async (options) => {
-  const {
-    userId,
-    trips,
-    dateFrom,
-    dateTo,
-    taxYear,
-    totalMiles,
-    totalAmount,
-    tripCount,
-  } = options;
+function generateSummaryText(summary, taxYear) {
+  return `
+Mileage Summary for Tax Year ${taxYear}
+================================
 
-  return new Promise((resolve, reject) => {
-    try {
-      const filename = `report_${Date.now()}_${userId.slice(0, 8)}.csv`;
-      const filepath = path.join(REPORTS_DIR, filename);
-      const stream = fs.createWriteStream(filepath);
-      const csvStream = format({ headers: true });
+Total Miles: ${summary.totalMiles.toFixed(2)}
+Total Claim Amount: £${summary.totalAmount.toFixed(2)}
+Number of Trips: ${summary.tripCount}
 
-      csvStream.pipe(stream);
+Breakdown:
+- Miles at 45p: ${(summary.breakdown?.at45p || summary.at45p || { miles: 0 }).miles.toFixed(2)} (£${(summary.breakdown?.at45p || summary.at45p || { amount: 0 }).amount.toFixed(2)})
+- Miles at 25p: ${(summary.breakdown?.at25p || summary.at25p || { miles: 0 }).miles.toFixed(2)} (£${(summary.breakdown?.at25p || summary.at25p || { amount: 0 }).amount.toFixed(2)})
 
-      // Write header info as comments
-      csvStream.write({
-        'Date': '# UK Business Mileage Report',
-        'From': '',
-        'To': '',
-        'Start Postcode': '',
-        'End Postcode': '',
-        'Purpose': '',
-        'Purpose Category': '',
-        'Miles': '',
-        'Rate': '',
-        'Amount': '',
-        'Notes': '',
-      });
-
-      csvStream.write({
-        'Date': `# Period: ${new Date(dateFrom).toLocaleDateString('en-GB')} - ${new Date(dateTo).toLocaleDateString('en-GB')}`,
-        'From': '',
-        'To': '',
-        'Start Postcode': '',
-        'End Postcode': '',
-        'Purpose': '',
-        'Purpose Category': '',
-        'Miles': '',
-        'Rate': '',
-        'Amount': '',
-        'Notes': '',
-      });
-
-      if (taxYear) {
-        csvStream.write({
-          'Date': `# Tax Year: ${taxYear}`,
-          'From': '',
-          'To': '',
-          'Start Postcode': '',
-          'End Postcode': '',
-          'Purpose': '',
-          'Purpose Category': '',
-          'Miles': '',
-          'Rate': '',
-          'Amount': '',
-          'Notes': '',
-        });
-      }
-
-      csvStream.write({
-        'Date': `# Total Trips: ${tripCount}, Total Miles: ${totalMiles}, Total Amount: ${formatCurrency(totalAmount)}`,
-        'From': '',
-        'To': '',
-        'Start Postcode': '',
-        'End Postcode': '',
-        'Purpose': '',
-        'Purpose Category': '',
-        'Miles': '',
-        'Rate': '',
-        'Amount': '',
-        'Notes': '',
-      });
-
-      // Empty row
-      csvStream.write({
-        'Date': '',
-        'From': '',
-        'To': '',
-        'Start Postcode': '',
-        'End Postcode': '',
-        'Purpose': '',
-        'Purpose Category': '',
-        'Miles': '',
-        'Rate': '',
-        'Amount': '',
-        'Notes': '',
-      });
-
-      // Column headers
-      csvStream.write({
-        'Date': 'Date',
-        'From': 'From',
-        'To': 'To',
-        'Start Postcode': 'Start Postcode',
-        'End Postcode': 'End Postcode',
-        'Purpose': 'Purpose',
-        'Purpose Category': 'Purpose Category',
-        'Miles': 'Miles',
-        'Rate': 'Rate (pence)',
-        'Amount': 'Amount (GBP)',
-        'Notes': 'Notes',
-      });
-
-      // Data rows
-      trips.forEach((trip) => {
-        csvStream.write({
-          'Date': new Date(trip.tripDate).toLocaleDateString('en-GB'),
-          'From': trip.startLocation,
-          'To': trip.endLocation,
-          'Start Postcode': trip.startPostcode || '',
-          'End Postcode': trip.endPostcode || '',
-          'Purpose': trip.purpose,
-          'Purpose Category': trip.purposeCategory || '',
-          'Miles': parseFloat(trip.distanceMiles).toFixed(2),
-          'Rate': (parseFloat(trip.rateApplied) * 100).toFixed(0),
-          'Amount': parseFloat(trip.amountGbp).toFixed(2),
-          'Notes': trip.notes || '',
-        });
-      });
-
-      // Summary row
-      csvStream.write({
-        'Date': '',
-        'From': '',
-        'To': '',
-        'Start Postcode': '',
-        'End Postcode': '',
-        'Purpose': 'TOTAL',
-        'Purpose Category': '',
-        'Miles': totalMiles.toFixed(2),
-        'Rate': '',
-        'Amount': totalAmount.toFixed(2),
-        'Notes': '',
-      });
-
-      csvStream.end();
-
-      stream.on('finish', () => {
-        const stats = fs.statSync(filepath);
-        resolve({
-          filename,
-          filepath,
-          size: stats.size,
-        });
-      });
-
-      stream.on('error', reject);
-    } catch (error) {
-      reject(error);
-    }
-  });
-};
-
-/**
- * Generate report based on format
- * @param {string} format - Report format (pdf, csv)
- * @param {Object} options - Report options
- * @returns {Promise<Object>} Generated report info
- */
-const generateReport = async (format, options) => {
-  switch (format.toLowerCase()) {
-    case 'pdf':
-      return generatePDF(options);
-    case 'csv':
-      return generateCSV(options);
-    default:
-      throw new Error(`Unsupported report format: ${format}`);
-  }
-};
-
-/**
- * Get trips for report
- * @param {string} userId - User ID
- * @param {Object} filters - Report filters
- * @returns {Promise<Array>} Trips
- */
-const getTripsForReport = async (userId, filters) => {
-  const { dateFrom, dateTo, vehicleId, purposeCategory } = filters;
-
-  const where = {
-    userId,
-    tripDate: {
-      gte: new Date(dateFrom),
-      lte: new Date(dateTo),
-    },
-  };
-
-  if (vehicleId) {
-    where.vehicleId = vehicleId;
-  }
-
-  if (purposeCategory) {
-    where.purposeCategory = purposeCategory;
-  }
-
-  const trips = await prisma.trip.findMany({
-    where,
-    include: {
-      vehicle: {
-        select: {
-          name: true,
-          registration: true,
-        },
-      },
-    },
-    orderBy: {
-      tripDate: 'asc',
-    },
-  });
-
-  return trips;
-};
-
-/**
- * Calculate report totals
- * @param {Array} trips - Trips array
- * @returns {Object} Totals
- */
-const calculateTotals = (trips) => {
-  let totalMiles = 0;
-  let totalAmount = 0;
-
-  trips.forEach((trip) => {
-    totalMiles += parseFloat(trip.distanceMiles);
-    totalAmount += parseFloat(trip.amountGbp);
-  });
-
-  return {
-    totalMiles: Math.round(totalMiles * 100) / 100,
-    totalAmount: Math.round(totalAmount * 100) / 100,
-    tripCount: trips.length,
-  };
-};
-
-/**
- * Delete report file
- * @param {string} filename - Filename to delete
- */
-const deleteReportFile = (filename) => {
-  const filepath = path.join(REPORTS_DIR, filename);
-  if (fs.existsSync(filepath)) {
-    fs.unlinkSync(filepath);
-  }
-};
-
-/**
- * Get report file path
- * @param {string} filename - Filename
- * @returns {string} File path
- */
-const getReportFilePath = (filename) => {
-  return path.join(REPORTS_DIR, filename);
-};
-
-/**
- * Check if report file exists
- * @param {string} filename - Filename
- * @returns {boolean} Exists
- */
-const reportFileExists = (filename) => {
-  const filepath = path.join(REPORTS_DIR, filename);
-  return fs.existsSync(filepath);
-};
-
-// Helper function to truncate text
-const truncate = (text, maxLength) => {
-  if (!text) return '';
-  if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength - 3) + '...';
-};
+Generated on ${format(new Date(), 'dd/MM/yyyy')}
+  `.trim();
+}
 
 module.exports = {
-  generatePDF,
-  generateCSV,
-  generateReport,
-  getTripsForReport,
-  calculateTotals,
-  deleteReportFile,
-  getReportFilePath,
-  reportFileExists,
-  REPORTS_DIR,
+  generatePDFReport,
+  generateCSVReport,
+  generateSummaryText,
 };

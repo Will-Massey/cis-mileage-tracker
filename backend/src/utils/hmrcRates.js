@@ -1,269 +1,194 @@
 /**
- * HMRC Mileage Rates Utility
- * UK HMRC approved mileage rates for business travel
- * 
- * Current Rates (2024-25 Tax Year):
- * - Cars & Vans: 45p for first 10,000 miles, 25p thereafter
- * - Motorcycles: 24p per mile (flat rate)
- * - Bicycles: 20p per mile (flat rate)
+ * HMRC Rates and Calculations
+ * UK tax compliance for business mileage
  */
 
-// HMRC Mileage Rate Configuration
+// HMRC Mileage Rates (per mile)
 const HMRC_RATES = {
-  // 2024-25 Tax Year (April 6, 2024 - April 5, 2025)
-  '2024-25': {
-    car: {
-      first10000: 0.45,
-      over10000: 0.25,
-    },
-    van: {
-      first10000: 0.45,
-      over10000: 0.25,
-    },
-    motorcycle: {
-      first10000: 0.24,
-      over10000: 0.24, // Flat rate
-    },
-    bicycle: {
-      first10000: 0.20,
-      over10000: 0.20, // Flat rate
-    },
-  },
-  // 2023-24 Tax Year (April 6, 2023 - April 5, 2024)
-  '2023-24': {
-    car: {
-      first10000: 0.45,
-      over10000: 0.25,
-    },
-    van: {
-      first10000: 0.45,
-      over10000: 0.25,
-    },
-    motorcycle: {
-      first10000: 0.24,
-      over10000: 0.24,
-    },
-    bicycle: {
-      first10000: 0.20,
-      over10000: 0.20,
-    },
-  },
+  '2024-25': { first10000: 0.45, over10000: 0.25 },
+  '2023-24': { first10000: 0.45, over10000: 0.25 },
+  '2022-23': { first10000: 0.45, over10000: 0.25 },
+  '2021-22': { first10000: 0.45, over10000: 0.25 },
+  '2020-21': { first10000: 0.45, over10000: 0.25 },
 };
 
-// Default rates if tax year not found
-const DEFAULT_RATES = {
-  car: { first10000: 0.45, over10000: 0.25 },
-  van: { first10000: 0.45, over10000: 0.25 },
-  motorcycle: { first10000: 0.24, over10000: 0.24 },
-  bicycle: { first10000: 0.20, over10000: 0.20 },
-};
-
-// Threshold for rate change
 const MILEAGE_THRESHOLD = 10000;
 
 /**
- * Get HMRC rates for a specific tax year and vehicle type
- * @param {string} taxYear - Tax year (e.g., '2024-25')
- * @param {string} vehicleType - Vehicle type (car, van, motorcycle, bicycle)
- * @returns {Object} Rate configuration
+ * Get current tax year (runs April 6 - April 5)
+ * @param {Date} date - Date to check
+ * @returns {string} Tax year in format 'YYYY-YY'
  */
-const getRates = (taxYear, vehicleType = 'car') => {
-  const yearRates = HMRC_RATES[taxYear] || DEFAULT_RATES;
-  return yearRates[vehicleType] || yearRates.car;
-};
+function getTaxYearForDate(date = new Date()) {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = d.getMonth(); // 0-indexed (0 = Jan, 3 = Apr)
+  const day = d.getDate();
+
+  // If before April 6, tax year started previous year
+  if (month < 3 || (month === 3 && day < 6)) {
+    return `${year - 1}-${String(year).slice(-2)}`;
+  }
+  return `${year}-${String(year + 1).slice(-2)}`;
+}
 
 /**
- * Get current tax year based on date
- * UK tax year runs from April 6 to April 5
- * @param {Date} date - Date to check (defaults to today)
- * @returns {string} Tax year string (e.g., '2024-25')
+ * Get current tax year
+ * @returns {string} Current tax year
  */
-const getCurrentTaxYear = (date = new Date()) => {
-  const year = date.getFullYear();
-  const month = date.getMonth(); // 0-11
-  const day = date.getDate();
+function getCurrentTaxYear() {
+  return getTaxYearForDate();
+}
 
-  // UK tax year starts April 6
-  // If before April 6, we're in the previous tax year
-  if (month < 3 || (month === 3 && day < 6)) {
-    return `${year - 1}-${year.toString().slice(-2)}`;
+/**
+ * Get rates for tax year
+ * @param {string} taxYear - Tax year
+ * @param {string} vehicleType - Vehicle type (car, motorcycle, bicycle)
+ * @returns {object} Rates object
+ */
+function getRates(taxYear, vehicleType = 'car') {
+  const yearRates = HMRC_RATES[taxYear] || HMRC_RATES['2024-25'];
+  
+  // Motorcycles and bicycles have flat rates
+  if (vehicleType === 'motorcycle') {
+    return { first10000: 0.24, over10000: 0.24 };
+  }
+  if (vehicleType === 'bicycle') {
+    return { first10000: 0.20, over10000: 0.20 };
   }
   
-  return `${year}-${(year + 1).toString().slice(-2)}`;
-};
+  return yearRates;
+}
 
 /**
- * Calculate tax year for a specific date
- * @param {Date} date - Date to calculate tax year for
- * @returns {string} Tax year string
- */
-const getTaxYearForDate = (date) => {
-  if (!(date instanceof Date)) {
-    date = new Date(date);
-  }
-  return getCurrentTaxYear(date);
-};
-
-/**
- * Calculate mileage claim amount using HMRC rates
- * @param {number} distance - Distance in miles
- * @param {number} ytdMiles - Year-to-date miles already claimed
+ * Calculate mileage amount with YTD tracking
+ * @param {number} miles - Trip miles
+ * @param {number} ytdMiles - Year-to-date miles before this trip
  * @param {string} taxYear - Tax year
  * @param {string} vehicleType - Vehicle type
- * @returns {Object} Calculation result
+ * @returns {object} Calculation result
  */
-const calculateMileageAmount = (distance, ytdMiles = 0, taxYear, vehicleType = 'car') => {
+function calculateMileageAmount(miles, ytdMiles, taxYear, vehicleType = 'car') {
   const rates = getRates(taxYear, vehicleType);
   
   let rateApplied;
   let amount;
-  let newYtdMiles = ytdMiles + distance;
+  let milesAt45p = 0;
+  let milesAt25p = 0;
+  let amountAt45p = 0;
+  let amountAt25p = 0;
 
-  // Check if vehicle type has flat rate (motorcycle, bicycle)
+  // Check if vehicle type has flat rate (same rate for all miles)
   if (rates.first10000 === rates.over10000) {
     rateApplied = rates.first10000;
-    amount = distance * rateApplied;
+    amount = miles * rateApplied;
+    milesAt45p = 0;
+    milesAt25p = miles;
+    amountAt45p = 0;
+    amountAt25p = amount;
   } else {
-    // Variable rate (car, van)
+    // Variable rate (cars/vans)
     if (ytdMiles >= MILEAGE_THRESHOLD) {
-      // Already over threshold, use lower rate for all miles
+      // All miles at lower rate
       rateApplied = rates.over10000;
-      amount = distance * rates.over10000;
-    } else if (newYtdMiles <= MILEAGE_THRESHOLD) {
-      // Still under threshold, use higher rate for all miles
+      amount = miles * rateApplied;
+      milesAt45p = 0;
+      milesAt25p = miles;
+      amountAt45p = 0;
+      amountAt25p = amount;
+    } else if (ytdMiles + miles <= MILEAGE_THRESHOLD) {
+      // All miles at higher rate
       rateApplied = rates.first10000;
-      amount = distance * rates.first10000;
+      amount = miles * rateApplied;
+      milesAt45p = miles;
+      milesAt25p = 0;
+      amountAt45p = amount;
+      amountAt25p = 0;
     } else {
-      // Crossing the threshold - mixed rate calculation
+      // Mixed rate - straddles the threshold
       const milesAtHigherRate = MILEAGE_THRESHOLD - ytdMiles;
-      const milesAtLowerRate = distance - milesAtHigherRate;
+      const milesAtLowerRate = miles - milesAtHigherRate;
       
-      const amountAtHigherRate = milesAtHigherRate * rates.first10000;
-      const amountAtLowerRate = milesAtLowerRate * rates.over10000;
+      amountAt45p = milesAtHigherRate * rates.first10000;
+      amountAt25p = milesAtLowerRate * rates.over10000;
+      amount = amountAt45p + amountAt25p;
       
-      amount = amountAtHigherRate + amountAtLowerRate;
-      
-      // Calculate effective rate for this trip
-      rateApplied = amount / distance;
+      rateApplied = amount / miles;
+      milesAt45p = milesAtHigherRate;
+      milesAt25p = milesAtLowerRate;
     }
   }
 
   return {
-    distance: Math.round(distance * 100) / 100,
-    ytdMilesBefore: Math.round(ytdMiles * 100) / 100,
-    ytdMilesAfter: Math.round(newYtdMiles * 100) / 100,
-    rateApplied: Math.round(rateApplied * 100) / 100,
+    miles,
     amount: Math.round(amount * 100) / 100,
+    rateApplied: Math.round(rateApplied * 100) / 100,
+    ytdMilesAfter: Math.round((ytdMiles + miles) * 100) / 100,
     taxYear,
-    vehicleType,
-    thresholdCrossed: ytdMiles < MILEAGE_THRESHOLD && newYtdMiles > MILEAGE_THRESHOLD,
+    milesAt45p: Math.round(milesAt45p * 100) / 100,
+    milesAt25p: Math.round(milesAt25p * 100) / 100,
+    amountAt45p: Math.round(amountAt45p * 100) / 100,
+    amountAt25p: Math.round(amountAt25p * 100) / 100,
   };
-};
+}
 
 /**
- * Calculate summary statistics for a set of trips
+ * Calculate summary for multiple trips
  * @param {Array} trips - Array of trip objects
- * @returns {Object} Summary statistics
+ * @returns {object} Summary statistics
  */
-const calculateTripSummary = (trips) => {
-  if (!trips || trips.length === 0) {
-    return {
-      totalMiles: 0,
-      totalAmount: 0,
-      tripCount: 0,
-      at45p: { miles: 0, amount: 0 },
-      at25p: { miles: 0, amount: 0 },
-    };
-  }
+function calculateTripSummary(trips) {
+  const summary = {
+    totalMiles: 0,
+    totalAmount: 0,
+    tripCount: trips.length,
+    at45p: { miles: 0, amount: 0 },
+    at25p: { miles: 0, amount: 0 },
+  };
 
-  let totalMiles = 0;
-  let totalAmount = 0;
-  let milesAt45p = 0;
-  let amountAt45p = 0;
-  let milesAt25p = 0;
-  let amountAt25p = 0;
+  trips.forEach(trip => {
+    const miles = parseFloat(trip.distanceMiles);
+    const amount = parseFloat(trip.amountGbp);
+    const rate = parseFloat(trip.rateApplied);
 
-  trips.forEach((trip) => {
-    const miles = parseFloat(trip.distanceMiles || trip.distance_miles || 0);
-    const amount = parseFloat(trip.amountGbp || trip.amount_gbp || 0);
-    const rate = parseFloat(trip.rateApplied || trip.rate_applied || 0);
+    summary.totalMiles += miles;
+    summary.totalAmount += amount;
 
-    totalMiles += miles;
-    totalAmount += amount;
-
+    // Categorize by rate (approximately)
     if (rate >= 0.40) {
-      milesAt45p += miles;
-      amountAt45p += amount;
+      summary.at45p.miles += miles;
+      summary.at45p.amount += amount;
     } else {
-      milesAt25p += miles;
-      amountAt25p += amount;
+      summary.at25p.miles += miles;
+      summary.at25p.amount += amount;
     }
   });
 
-  return {
-    totalMiles: Math.round(totalMiles * 100) / 100,
-    totalAmount: Math.round(totalAmount * 100) / 100,
-    tripCount: trips.length,
-    at45p: {
-      miles: Math.round(milesAt45p * 100) / 100,
-      amount: Math.round(amountAt45p * 100) / 100,
-    },
-    at25p: {
-      miles: Math.round(milesAt25p * 100) / 100,
-      amount: Math.round(amountAt25p * 100) / 100,
-    },
-  };
-};
+  // Round values
+  summary.totalMiles = Math.round(summary.totalMiles * 100) / 100;
+  summary.totalAmount = Math.round(summary.totalAmount * 100) / 100;
+  summary.at45p.miles = Math.round(summary.at45p.miles * 100) / 100;
+  summary.at45p.amount = Math.round(summary.at45p.amount * 100) / 100;
+  summary.at25p.miles = Math.round(summary.at25p.miles * 100) / 100;
+  summary.at25p.amount = Math.round(summary.at25p.amount * 100) / 100;
 
-/**
- * Get all available tax years
- * @returns {Array} Array of tax year strings
- */
-const getAvailableTaxYears = () => {
-  return Object.keys(HMRC_RATES);
-};
+  return summary;
+}
 
 /**
  * Get mileage threshold
  * @returns {number} Mileage threshold (10000)
  */
-const getMileageThreshold = () => {
+function getMileageThreshold() {
   return MILEAGE_THRESHOLD;
-};
-
-/**
- * Format amount as GBP currency string
- * @param {number} amount - Amount to format
- * @returns {string} Formatted currency string
- */
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency: 'GBP',
-  }).format(amount);
-};
-
-/**
- * Format miles with proper pluralization
- * @param {number} miles - Number of miles
- * @returns {string} Formatted miles string
- */
-const formatMiles = (miles) => {
-  const rounded = Math.round(miles * 100) / 100;
-  return `${rounded} mile${rounded === 1 ? '' : 's'}`;
-};
+}
 
 module.exports = {
   HMRC_RATES,
-  DEFAULT_RATES,
-  MILEAGE_THRESHOLD,
-  getRates,
-  getCurrentTaxYear,
   getTaxYearForDate,
+  getCurrentTaxYear,
+  getRates,
   calculateMileageAmount,
   calculateTripSummary,
-  getAvailableTaxYears,
   getMileageThreshold,
-  formatCurrency,
-  formatMiles,
 };

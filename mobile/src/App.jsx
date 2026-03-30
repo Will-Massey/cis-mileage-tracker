@@ -23,6 +23,7 @@ function App() {
   const [isOnline, setIsOnline] = useState(true)
   const [user, setUser] = useState(null)
   const [trips, setTrips] = useState([])
+  const [showWelcome, setShowWelcome] = useState(true)
   const [stats, setStats] = useState({
     todayMiles: 0,
     todaySavings: 0,
@@ -53,6 +54,7 @@ function App() {
       const { value } = await Preferences.get({ key: 'user' })
       if (value) {
         setUser(JSON.parse(value))
+        setShowWelcome(false)
       }
     } catch (error) {
       console.error('Failed to load user:', error)
@@ -114,6 +116,10 @@ function App() {
     calculateStats(updatedTrips)
   }
 
+  const dismissWelcome = () => {
+    setShowWelcome(false)
+  }
+
   if (!user) {
     return <LoginScreen onLogin={setUser} />
   }
@@ -132,36 +138,77 @@ function App() {
       </div>
 
       {/* Main Content */}
-      <div className="p-4 pb-24">
+      <div className="p-4 pb-28">
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold">CIS Mileage Tracker</h1>
-          <p className="text-slate-400">Welcome back, {user.firstName}</p>
+        <div className="mb-4">
+          <h1 className="text-xl font-bold">CIS Mileage Tracker</h1>
+          <p className="text-slate-400 text-sm">Welcome back, {user.firstName}</p>
         </div>
 
-        {/* Stats Overview */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-slate-800 rounded-xl p-4">
-            <div className="text-slate-400 text-sm">Today's Miles</div>
-            <div className="text-2xl font-bold text-blue-400">{stats.todayMiles.toFixed(1)}</div>
+        {/* Welcome Banner - Shows Value Proposition */}
+        {showWelcome && (
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-4 mb-4">
+            <div className="flex justify-between items-start mb-2">
+              <h3 className="font-semibold text-white">💰 Save Money on Tax</h3>
+              <button 
+                onClick={dismissWelcome}
+                className="text-blue-200 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-sm text-blue-100 mb-3">
+              As a CIS contractor, every business mile saves you <strong>20% in tax</strong>. 
+              Drive 100 miles = claim £45 = <strong>save £9</strong>!
+            </p>
+            <div className="flex gap-2 text-xs">
+              <span className="bg-white/20 px-2 py-1 rounded">45p/mile</span>
+              <span className="bg-white/20 px-2 py-1 rounded">20% CIS</span>
+              <span className="bg-white/20 px-2 py-1 rounded">HMRC Approved</span>
+            </div>
           </div>
+        )}
+
+        {/* CIS Savings Card - Full Width */}
+        <div className="mb-4">
           <CISSavingsCard 
-            miles={stats.todayMiles} 
-            cisRate={user.cisRate || 0.20} 
+            totalMiles={stats.monthMiles}
+            totalClaim={stats.monthMiles * 0.45}
+            taxSaved={stats.monthMiles * 0.45 * 0.20}
+            cisRate={'20%'}
           />
-          <div className="bg-slate-800 rounded-xl p-4">
-            <div className="text-slate-400 text-sm">This Week</div>
-            <div className="text-xl font-bold">{stats.weekMiles.toFixed(1)} mi</div>
+        </div>
+
+        {/* Stats Row */}
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="bg-slate-800 rounded-xl p-3 text-center">
+            <div className="text-xl font-bold text-blue-400">{stats.todayMiles.toFixed(0)}</div>
+            <div className="text-xs text-slate-400">Today's Miles</div>
           </div>
-          <div className="bg-slate-800 rounded-xl p-4">
-            <div className="text-slate-400 text-sm">This Month</div>
-            <div className="text-xl font-bold">{stats.monthMiles.toFixed(1)} mi</div>
+          <div className="bg-slate-800 rounded-xl p-3 text-center">
+            <div className="text-xl font-bold text-green-400">{stats.weekMiles.toFixed(0)}</div>
+            <div className="text-xs text-slate-400">This Week</div>
+          </div>
+          <div className="bg-slate-800 rounded-xl p-3 text-center">
+            <div className="text-xl font-bold text-purple-400">{stats.monthMiles.toFixed(0)}</div>
+            <div className="text-xs text-slate-400">This Month</div>
           </div>
         </div>
 
-        {/* GPS Tracking */}
-        <div className="bg-slate-800 rounded-xl p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">Track Trip</h2>
+        {/* GPS Tracking Section */}
+        <div className="bg-slate-800 rounded-xl p-4 mb-4">
+          <h2 className="text-base font-semibold mb-3">Track Trip</h2>
+          
+          {/* GPS Warning for Web */}
+          {!isNative && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 mb-4">
+              <p className="text-xs text-amber-200">
+                <strong>⚠️ Browser Mode:</strong> GPS auto-tracking requires the native app. 
+                For automatic tracking, install from app store (coming soon) or use Android Studio build.
+              </p>
+            </div>
+          )}
+          
           <div className="flex justify-center">
             <GPSTrackingButton 
               onTripStart={() => console.log('Trip started')}
@@ -169,22 +216,36 @@ function App() {
               userId={user.id}
             />
           </div>
-          <p className="text-center text-slate-400 text-sm mt-4">
-            Tap to start tracking. Trip auto-starts at 5mph.
+          <p className="text-center text-slate-400 text-xs mt-3">
+            {isNative 
+              ? 'Tap to start. Trip auto-starts at 5mph.' 
+              : 'Manual mode: Tap to add trip manually'
+            }
           </p>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <ReceiptCapture 
-            userId={user.id}
-            onCapture={(receipt) => console.log('Receipt:', receipt)}
-          />
+        {/* Value Example */}
+        <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 mb-4">
+          <h3 className="text-sm font-semibold text-green-400 mb-2">💡 See the Savings</h3>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-300">Weekly commute (50 miles × 5 days)</span>
+              <span className="text-green-400 font-semibold">Save £9/week</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-300">Monthly (200 miles/week)</span>
+              <span className="text-green-400 font-semibold">Save £36/month</span>
+            </div>
+            <div className="flex justify-between border-t border-green-500/20 pt-2">
+              <span className="text-slate-300">Yearly potential</span>
+              <span className="text-green-400 font-bold">Save £400+/year</span>
+            </div>
+          </div>
         </div>
 
         {/* Recent Trips */}
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold mb-4">Recent Trips</h2>
+        <div className="mb-4">
+          <h2 className="text-base font-semibold mb-3">Recent Trips</h2>
           <div className="space-y-3">
             {trips.map(trip => (
               <SwipeableTripCard
@@ -195,8 +256,12 @@ function App() {
               />
             ))}
             {trips.length === 0 && (
-              <div className="text-center text-slate-500 py-8">
-                No trips yet. Tap the GPS button to start tracking!
+              <div className="bg-slate-800 rounded-xl p-6 text-center">
+                <div className="text-4xl mb-2">🚗</div>
+                <p className="text-slate-400 text-sm">No trips recorded yet</p>
+                <p className="text-slate-500 text-xs mt-1">
+                  Tap "Start Tracking" above to begin
+                </p>
               </div>
             )}
           </div>
@@ -207,7 +272,7 @@ function App() {
       </div>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 px-6 py-3">
+      <nav className="fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 px-6 py-3 safe-area-bottom">
         <div className="flex justify-around">
           <NavButton icon="home" label="Home" active />
           <NavButton icon="map" label="Sites" />
@@ -236,9 +301,20 @@ function LoginScreen({ onLogin }) {
         <span className="text-3xl font-bold">CIS</span>
       </div>
       <h1 className="text-2xl font-bold mb-2">CIS Mileage Tracker</h1>
-      <p className="text-slate-400 text-center mb-8">
-        Track mileage, calculate CIS tax savings, and manage construction sites
+      <p className="text-slate-400 text-center mb-2">
+        Track mileage, calculate CIS tax savings
       </p>
+      
+      {/* Value Prop on Login */}
+      <div className="bg-green-500/10 rounded-xl p-4 mb-6 max-w-xs">
+        <p className="text-sm text-green-200 text-center">
+          💰 Save <strong>20% tax</strong> on every business mile
+        </p>
+        <p className="text-xs text-slate-400 text-center mt-1">
+          Average CIS contractor saves £400+ per year
+        </p>
+      </div>
+      
       <button
         onClick={handleLogin}
         className="w-full max-w-xs bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
