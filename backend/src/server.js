@@ -17,28 +17,40 @@ const HOST = process.env.HOST || '0.0.0.0';
  */
 const startServer = async () => {
   try {
-    // Test database connection
-    const isConnected = await testConnection();
-    
-    if (!isConnected) {
-      console.error('Failed to connect to database. Exiting...');
-      process.exit(1);
-    }
-
-    // Start server
+    // Start server first (so health checks pass)
     const server = app.listen(PORT, HOST, () => {
       console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║
 ║     UK Business Mileage Tracker API                        ║
 ║                                                            ║
-║     Server running on http://${HOST}:${PORT}              ║
-║     Environment: ${process.env.NODE_ENV || 'development'}                            ║
-║     API Base URL: http://${HOST}:${PORT}/api              ║
+║     Server running on http://${HOST}:${PORT}              
+║     Environment: ${process.env.NODE_ENV || 'development'}                            
+║     API Base URL: http://${HOST}:${PORT}/api              
 ║                                                            ║
 ╚════════════════════════════════════════════════════════════╝
       `);
     });
+
+    // Try to connect to database with retries
+    let isConnected = false;
+    let retries = 0;
+    const maxRetries = 5;
+    
+    while (!isConnected && retries < maxRetries) {
+      isConnected = await testConnection();
+      if (!isConnected) {
+        retries++;
+        console.log(`Database connection failed, retrying... (${retries}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+    
+    if (!isConnected) {
+      console.error('Warning: Database connection failed after retries. Some features may not work.');
+    } else {
+      console.log('✅ Database connected successfully');
+    }
 
     // Graceful shutdown handling
     const gracefulShutdown = (signal) => {
