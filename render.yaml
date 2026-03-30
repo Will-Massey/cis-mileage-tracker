@@ -39,7 +39,7 @@ services:
     name: mileage-tracker
     env: static
     buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: frontend/dist
+    staticPublishPath: ./frontend/dist
     envVars:
       - key: VITE_API_URL
         value: https://mileage-api.onrender.com/api
