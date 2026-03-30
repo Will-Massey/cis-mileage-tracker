@@ -1,0 +1,306 @@
+// ============================================
+// UK Business Mileage Tracker - Prisma Schema
+// Target Platform: SQLite (for local development)
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+model Company {
+  id            String   @id @default(uuid())
+  name          String
+  addressLine1  String?
+  addressLine2  String?
+  city          String?
+  postcode      String?
+  vatNumber     String?
+  cisNumber     String?
+  contactEmail  String?
+  contactPhone  String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@map("companies")
+}
+
+model User {
+  id                     String    @id @default(uuid())
+  email                  String    @unique
+  passwordHash           String    @map("password_hash")
+  firstName              String    @map("first_name")
+  lastName               String    @map("last_name")
+  role                   String    @default("user")
+  companyId              String?   @map("company_id")
+  phone                  String?
+  isActive               Boolean   @default(true) @map("is_active")
+  emailVerified          Boolean   @default(false) @map("email_verified")
+  emailVerifiedAt        DateTime? @map("email_verified_at")
+  passwordResetToken     String?   @map("password_reset_token")
+  passwordResetExpiresAt DateTime? @map("password_reset_expires_at")
+  lastLoginAt            DateTime? @map("last_login_at")
+  loginCount             Int       @default(0) @map("login_count")
+  preferences            String    @default("{}")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  company           Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  trips             Trip[]
+  vehicles          Vehicle[]
+  reports           Report[]
+  receipts          Receipt[]
+  refreshTokens     RefreshToken[]
+  auditLogs         AuditLog[]
+  mileageSummaries  UserMileageSummary[]
+  sites             Site[]
+
+  @@index([email])
+  @@index([companyId])
+  @@index([role])
+  @@index([isActive])
+  @@map("users")
+}
+
+model RefreshToken {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  token            String    @unique
+  expiresAt        DateTime  @map("expires_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  revokedAt        DateTime? @map("revoked_at")
+  replacedByToken  String?   @map("replaced_by_token")
+  ipAddress        String?   @map("ip_address")
+  userAgent        String?   @map("user_agent")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model MileageRate {
+  id              String   @id @default(uuid())
+  taxYear         String   @map("tax_year")
+  vehicleType     String   @map("vehicle_type")
+  rateFirst10000  Float    @map("rate_first_10000")
+  rateOver10000   Float    @map("rate_over_10000")
+  isActive        Boolean  @default(true) @map("is_active")
+  effectiveFrom   DateTime @map("effective_from")
+  effectiveTo     DateTime? @map("effective_to")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([taxYear, vehicleType])
+  @@map("mileage_rates")
+}
+
+model Vehicle {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  name          String
+  registration  String?
+  make          String?
+  model         String?
+  fuelType      String?   @map("fuel_type")
+  engineSize    String?   @map("engine_size")
+  year          Int?
+  color         String?
+  isCompanyCar  Boolean   @default(false) @map("is_company_car")
+  isActive      Boolean   @default(true) @map("is_active")
+  notes         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trips Trip[]
+
+  @@unique([userId, registration])
+  @@index([userId])
+  @@index([userId, isActive])
+  @@map("vehicles")
+}
+
+model Trip {
+  id                String    @id @default(uuid())
+  userId            String    @map("user_id")
+  vehicleId         String?   @map("vehicle_id")
+  tripDate          DateTime  @map("trip_date")
+  startLocation     String    @map("start_location")
+  endLocation       String    @map("end_location")
+  startPostcode     String?   @map("start_postcode")
+  endPostcode       String?   @map("end_postcode")
+  distanceMiles     Float     @map("distance_miles")
+  isRoundTrip       Boolean   @default(false) @map("is_round_trip")
+  purpose           String
+  purposeCategory   String?   @map("purpose_category")
+  taxYear           String    @map("tax_year")
+  vehicleType       String    @default("car") @map("vehicle_type")
+  rateApplied       Float     @map("rate_applied")
+  amountGbp         Float     @map("amount_gbp")
+  userMilesYtd      Float     @default(0) @map("user_miles_ytd")
+  notes             String?
+  gpsStart          String?   @map("gps_start")
+  gpsEnd            String?   @map("gps_end")
+  gpsRoute          String?   @map("gps_route")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  createdBy         String?   @map("created_by")
+  updatedBy         String?   @map("updated_by")
+
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicle  Vehicle?   @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  receipts Receipt[]
+
+  @@index([userId])
+  @@index([userId, tripDate])
+  @@index([tripDate])
+  @@index([tripDate, userId])
+  @@index([vehicleId])
+  @@index([taxYear])
+  @@map("trips")
+}
+
+model Receipt {
+  id               String    @id @default(uuid())
+  tripId           String?   @map("trip_id")
+  userId           String    @map("user_id")
+  filename         String
+  originalFilename String    @map("original_filename")
+  storageKey       String    @map("storage_key")
+  fileUrl          String    @map("file_url")
+  fileType         String    @map("file_type")
+  fileSize         Int       @map("file_size")
+  ocrData          String?   @map("ocr_data")
+  ocrProcessedAt   DateTime? @map("ocr_processed_at")
+  description      String?
+  expenseDate      DateTime? @map("expense_date")
+  expenseAmount    Float?    @map("expense_amount")
+  expenseCategory  String?   @map("expense_category")
+  uploadedAt       DateTime  @default(now()) @map("uploaded_at")
+  uploadedBy       String?   @map("uploaded_by")
+
+  trip Trip? @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@index([userId])
+  @@index([uploadedAt])
+  @@map("receipts")
+}
+
+model Report {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  name          String
+  description   String?
+  reportType    String    @default("mileage") @map("report_type")
+  dateFrom      DateTime  @map("date_from")
+  dateTo        DateTime  @map("date_to")
+  taxYear       String?   @map("tax_year")
+  format        String
+  totalMiles    Float     @default(0) @map("total_miles")
+  totalAmount   Float     @default(0) @map("total_amount")
+  tripCount     Int       @default(0) @map("trip_count")
+  filters       String    @default("{}") @map("filters")
+  fileUrl       String?   @map("file_url")
+  fileSize      Int?      @map("file_size")
+  downloadUrl   String?   @map("download_url")
+  downloadToken String?   @map("download_token")
+  expiresAt     DateTime? @map("expires_at")
+  status        String    @default("pending")
+  errorMessage  String?   @map("error_message")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  completedAt   DateTime? @map("completed_at")
+  generatedBy   String?   @map("generated_by")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([dateFrom, dateTo])
+  @@index([expiresAt])
+  @@index([status])
+  @@map("reports")
+}
+
+model AuditLog {
+  id            String    @id @default(uuid())
+  userId        String?   @map("user_id")
+  action        String
+  entityType    String    @map("entity_type")
+  entityId      String?   @map("entity_id")
+  oldData       String?   @map("old_data")
+  newData       String?   @map("new_data")
+  ipAddress     String?   @map("ip_address")
+  userAgent     String?   @map("user_agent")
+  requestMethod String?   @map("request_method")
+  requestPath   String?   @map("request_path")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([action, entityType])
+  @@map("audit_logs")
+}
+
+model UserMileageSummary {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  taxYear       String    @map("tax_year")
+  totalMiles    Float     @default(0) @map("total_miles")
+  totalClaimAmount Float  @default(0) @map("total_claim_amount")
+  tripCount     Int       @default(0) @map("trip_count")
+  milesAt45p    Float     @default(0) @map("miles_at_45p")
+  amountAt45p   Float     @default(0) @map("amount_at_45p")
+  milesAt25p    Float     @default(0) @map("miles_at_25p")
+  amountAt25p   Float     @default(0) @map("amount_at_25p")
+  lastTripDate  DateTime? @map("last_trip_date")
+  calculatedAt  DateTime  @default(now()) @map("calculated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, taxYear])
+  @@index([userId])
+  @@index([taxYear])
+  @@map("user_mileage_summaries")
+}
+
+model Site {
+  id              String    @id @default(uuid())
+  userId          String    @map("user_id")
+  name            String
+  address         String
+  postcode        String?
+  latitude        Float?
+  longitude       Float?
+  radius          Int       @default(100)
+  firstVisitDate  DateTime  @map("first_visit_date")
+  lastVisitDate   DateTime? @map("last_visit_date")
+  visitCount      Int       @default(0) @map("visit_count")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@index([userId, isActive])
+  @@map("sites")
+}
