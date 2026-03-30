@@ -42,7 +42,7 @@ services:
     staticPublishPath: ./frontend/dist
     envVars:
       - key: VITE_API_URL
-        value: https://mileage-api-XXXX.onrender.com/api
+        value: /api
       - key: VITE_APP_NAME
         value: Mileage Tracker
       - key: VITE_APP_VERSION
