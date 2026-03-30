@@ -7,7 +7,7 @@
 import React, { useState, useRef } from 'react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Preferences } from '@capacitor/preferences';
-import { SQLiteService } from '../services/SQLiteService';
+import SQLiteService from '../services/SQLiteService';
 
 const ReceiptCapture = ({ tripId, onReceiptSaved }) => {
   const [isCapturing, setIsCapturing] = useState(false);

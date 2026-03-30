@@ -33,7 +33,7 @@ router.post('/trips', authenticate, [
     const results = [];
     let created = 0;
     let updated = 0;
-    let errors = 0;
+    let errorCount = 0;
 
     // Process each trip
     for (const tripData of trips) {
@@ -91,7 +91,7 @@ router.post('/trips', authenticate, [
         }
       } catch (tripError) {
         console.error(`Error processing trip ${tripData.id}:`, tripError);
-        errors++;
+        errorCount++;
         results.push({ 
           id: tripData.id, 
           status: 'error', 
@@ -144,7 +144,7 @@ router.post('/receipts', authenticate, [
     const results = [];
     let created = 0;
     let updated = 0;
-    let errors = 0;
+    let errorCount = 0;
 
     for (const receiptData of receipts) {
       try {
@@ -184,7 +184,7 @@ router.post('/receipts', authenticate, [
         }
       } catch (receiptError) {
         console.error(`Error processing receipt ${receiptData.id}:`, receiptError);
-        errors++;
+        errorCount++;
         results.push({ 
           id: receiptData.id, 
           status: 'error', 
@@ -233,7 +233,7 @@ router.post('/sites', authenticate, [
     const results = [];
     let created = 0;
     let updated = 0;
-    let errors = 0;
+    let errorCount = 0;
 
     for (const siteData of sites) {
       try {
@@ -272,7 +272,7 @@ router.post('/sites', authenticate, [
         }
       } catch (siteError) {
         console.error(`Error processing site ${siteData.id}:`, siteError);
-        errors++;
+        errorCount++;
         results.push({ 
           id: siteData.id, 
           status: 'error', 

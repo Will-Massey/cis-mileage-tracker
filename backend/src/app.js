@@ -17,9 +17,7 @@ const reportRoutes = require('./routes/reports');
 const userRoutes = require('./routes/users');
 
 // Import mobile routes
-const tripsMobileRoutes = require('./routes/trips-mobile');
-const sitesMobileRoutes = require('./routes/sites-mobile');
-const usersMobileRoutes = require('./routes/users-mobile');
+const syncRoutes = require('./routes/sync');
 
 // Create Express app
 const app = express();
@@ -68,10 +66,8 @@ app.use(`${API_PREFIX}/trips`, tripRoutes);
 app.use(`${API_PREFIX}/reports`, reportRoutes);
 app.use(`${API_PREFIX}/users`, userRoutes);
 
-// Mount mobile routes
-app.use(`${API_PREFIX}/mobile/trips`, tripsMobileRoutes);
-app.use(`${API_PREFIX}/mobile/sites`, sitesMobileRoutes);
-app.use(`${API_PREFIX}/mobile/users`, usersMobileRoutes);
+// Mount sync routes for mobile
+app.use(`${API_PREFIX}/sync`, syncRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {

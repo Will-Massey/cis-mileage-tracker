@@ -5,7 +5,7 @@
 
 import { Geolocation } from '@capacitor/geolocation';
 import { Preferences } from '@capacitor/preferences';
-import { SQLiteService } from './SQLiteService';
+import SQLiteService from './SQLiteService';
 
 // Constants
 const GEOFENCE_RADIUS_METERS = 100; // 100m radius for site detection
