@@ -6,7 +6,7 @@ services:
   - type: web
     name: mileage-api
     runtime: node
-    plan: starter
+    plan: free
     region: frankfurt
     buildCommand: cd backend && npm install && npx prisma generate
     startCommand: cd backend && npm start
@@ -38,7 +38,6 @@ services:
   - type: web
     name: mileage-tracker
     env: static
-    plan: starter
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
     envVars:
@@ -70,7 +69,7 @@ services:
 
 databases:
   - name: mileage-db
-    plan: starter
+    plan: free
     region: frankfurt
     databaseName: mileage_tracker
     user: mileage_user
